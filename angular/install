@@ -216,7 +216,7 @@ EOL
 
 mkdir "front";
 
-ng new $appName --skipGit=true --prefix=$appName --style=$frontStyle --directory=front --routing=$frontRouting;
+# ng new $appName --skipGit=true --prefix=$appName --style=$frontStyle --directory=front --routing=$frontRouting;
 
 if [ $frontPWA == 1 ]; then
   cd front;
@@ -249,11 +249,30 @@ sed -i "10i$command" package.json
 command="\\\t\\t\"test\": \"\",";
 sed -i "10i$command" package.json
 
+command="\\\t\\t\"start:debug\": \"npm run build && node --inspect=0.0.0.0:5858 ./dist/server.js\",";
+sed -i "10i$command" package.json
+
 command="\\\t\\t\"start:dev\": \"env NODE_ENV=development nodemon --watch src -L --exec npm run start:debug\",";
 sed -i "10i$command" package.json
 
-npm install express body-parser dotenv swagger-ui-express;
-npm install --save-dev typescript ts-node @types/express @types/node eslint jest nodemon;
+# npm install express body-parser dotenv swagger-ui-express;
+# npm install --save-dev typescript ts-node @types/express @types/node eslint jest nodemon;
+
+tee -a nodemon.json &> /dev/null << EOL
+{
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    ".git",
+    "node_modules"
+  ],
+  "watch": [
+    "src"
+  ],
+  "exec": "npm start",
+  "ext": "ts"
+}
+EOL
 
 tee -a README.md &> /dev/null << EOL
 # $appName
