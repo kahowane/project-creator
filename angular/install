@@ -243,13 +243,13 @@ sed -i "s/back/$(grep name ../front/package.json | sed -e "s/\"name\": \"\(.*\)\
 
 sed -i '10d' package.json
 
-command="\"build\": \"tsc\"";
+command="\\\t\\t\"build\": \"tsc\"";
 sed -i "10i$command" package.json
 
-command="\"test\": \"...\",";
+command="\\\t\\t\"test\": \"\",";
 sed -i "10i$command" package.json
 
-command="\"start:dev\": \"env NODE_ENV=development nodemon --watch src -L --exec npm run start:debug\",";
+command="\\\t\\t\"start:dev\": \"env NODE_ENV=development nodemon --watch src -L --exec npm run start:debug\",";
 sed -i "10i$command" package.json
 
 npm install express body-parser dotenv swagger-ui-express;
@@ -257,6 +257,59 @@ npm install --save-dev typescript ts-node @types/express @types/node eslint jest
 
 tee -a README.md &> /dev/null << EOL
 # $appName
+EOL
+
+tee -a Dockerfile.dev &> /dev/null << EOL
+FROM node:lts
+
+WORKDIR /usr/src
+
+COPY package.json /usr/src/
+RUN npm install
+
+COPY . /usr/src/
+
+EXPOSE 3000
+
+CMD [ "npm", "run", "start" ]
+EOL
+
+tee -a Dockerfile.prod &> /dev/null << EOL
+### =============== ###
+###     STAGE 1     ###
+### =============== ###
+
+FROM node:lts AS builder
+
+WORKDIR /usr/src
+
+COPY package*.json /usr/src/
+RUN npm install
+
+COPY . /usr/src/
+
+RUN npm run build
+
+### =============== ###
+###     STAGE 2     ###
+### =============== ###
+
+FROM node:lts
+
+WORKDIR /usr/app
+
+COPY package*.json /usr/app/
+RUN npm install --production
+
+ENV APP_PORT=3000
+ENV NODE_ENV=production
+EXPOSE \$APP_PORT
+
+RUN mkdir dist
+COPY --from=builder /usr/src/dist /usr/app
+COPY --from=builder /usr/src/.sequelizerc /usr/app/
+
+CMD ["npm", "run", "start:prod"]
 EOL
 
 tee -a tsconfig.json &> /dev/null << EOL
@@ -342,10 +395,6 @@ docker-compose*
 Dockerfile
 dist
 tests
-EOL
-
-tee -a Dockerfile &> /dev/null << EOL
-
 EOL
 
 tee -a src/server.ts &> /dev/null << EOL
