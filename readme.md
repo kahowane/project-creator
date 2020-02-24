@@ -15,7 +15,7 @@ sh -c "$(curl -fsSL https://raw.github.com/kahowane/project-creator/master/angul
 |-d, --directory *directory*|Application directory|Project|.|
 |--style *css\|scss\|sass\|less\|styl*|Application style|Angular|scss|
 |--routing *true\|false*|Application routing|Angular|true|
-|--pwa|Progressive web app|Angular|false|
+|--pwa|Progressive web app|Angular||
 |--git-remote *git remote adress*|Git remote|Git||
 |--git-name *git user name*|Git user.name|Git||
 |--git-email *git user email*|Git user.email|Git||
