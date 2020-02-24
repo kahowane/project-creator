@@ -4,35 +4,46 @@
 ## Variables
 ##
 
-gotRemote="";
-gitName="";
-gitEmail="";
-
 appName="app";
 appDirectory=".";
-appStyle="scss";
-appRouting=true;
-appPWA=0;
+
+frontStyle="scss";
+frontRouting=true;
+frontPWA=0;
+
+gitCI="";
+gitRemote="";
+gitName="";
+gitEmail="";
 
 ##
 ## Functions
 ##
 
 usage() {
-  echo " usage: $0";
+  echo "                                                                                                         ";
+  echo " usage: ./angular/install                                                                                ";
   echo " ======================================================================================================= ";
+  echo "                                                                                                         ";
   echo "   Application parameters                                                                                ";
-  echo "     --name | -n       <app name>               -> Application name       -> Default app                 ";
-  echo "     --directory | -d  <app directory>          -> Application directory  -> Default .                   ";
-  echo "     --style           css|scss|sass|less|styl  -> Application style      -> Default scss                ";
-  echo "     --routing         true|false               -> Application routing    -> Default true                ";
-  echo "     --pwa                                      -> Progressive web app    -> Default false               ";
+  echo "     -n, --name          <app name>                 -> Application name         -> Default app           ";
+  echo "     -d, --directory     <app directory>            -> Application directory    -> Default .             ";
+  echo "                                                                                                         ";
+  echo "   Angular parameters                                                                                    ";
+  echo "     --style             css|scss|sass|less|styl    -> Application style        -> Default scss          ";
+  echo "     --routing           true|false                 -> Application routing      -> Default true          ";
+  echo "     --pwa                                          -> Progressive web app                               ";
+  echo "                                                                                                         ";
   echo "   Git parameters                                                                                        ";
-  echo "     --git-remote      <git remote adress>      -> Git remote                                            ";
-  echo "     --git-name        <git user name>          -> Git user.name                                         ";
-  echo "     --git-email       <git user email>         -> Git user.email                                        ";
+  echo "     --ci                gitlab|travis|github       -> Git CI config file       -> none                  ";
+  echo "     --git-remote        <git remote adress>        -> Git remote                                        ";
+  echo "     --git-name          <git user name>            -> Git user.name                                     ";
+  echo "     --git-email         <git user email>           -> Git user.email                                    ";
+  echo "                                                                                                         ";
   echo " ======================================================================================================= ";
-  echo "   --help | -h                                  -> Help                                                  ";
+  echo "                                                                                                         ";
+  echo "   --help | -h                                      -> Help                                              ";
+  echo "                                                                                                         ";
   exit 0;
 }
 
@@ -45,7 +56,31 @@ setDirectory() {
 }
 
 setStyle() {
-  appStyle="$1";
+  frontStyle="$1";
+}
+
+setRouting() {
+  frontRouting="$1";
+}
+
+setPWA() {
+  frontPWA=$1;
+}
+
+setGitCI() {
+  gitCI="$1";
+}
+
+setGitRemote() {
+  gitRemote="$1";
+}
+
+setGitName() {
+  gitName="$1";
+}
+
+setGitEmail() {
+  gitEmail="$1";
 }
 
 ##
@@ -66,19 +101,22 @@ while getopts "n:d:-:h" option; do
           setStyle "${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
           ;;
         routing)
-          appRouting="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          setRouting "${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
           ;;
         pwa)
-          appPWA=1;
+          setPWA 1;
+          ;;
+        ci)
+          setGitCI "${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
           ;;
         git-remote)
-          gitRemote="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          setGitRemote "${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
           ;;
         git-name)
-          gitName="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          setGitName "${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
           ;;
         git-email)
-          gitEmail="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          setGitEmail "${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
           ;;
         help)
           usage;
@@ -143,15 +181,44 @@ if [ "$gitEmail" != "" ]; then
   git config user.email "$gitEmail";
 fi
 
+case "$gitCI" in
+  gitlab)
+    touch .gitlab-ci.yml
+    ;;
+  travis)
+    touch .travis.yml
+    ;;
+  github)
+    mkdir -p .github/workflows
+    touch .github/workflows/main.yml
+    ;;
+esac
+
+tee -a README.md &> /dev/null << EOL
+# $appName
+EOL
+
+tee -a .editorconfig &> /dev/null << EOL
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+EOL
+
 ##
 ## Frontend
 ##
 
 mkdir "front";
 
-ng new $appName --skipGit=true --prefix=$appName --style=$appStyle --directory=front --routing=$appRouting;
+ng new $appName --skipGit=true --prefix=$appName --style=$frontStyle --directory=front --routing=$frontRouting;
 
-if [ $appPWA == 1 ]; then
+if [ $frontPWA == 1 ]; then
   cd front;
   ng add @angular/pwa;
   cd ..;
@@ -164,6 +231,7 @@ fi
 mkdir "back";
 mkdir "back/tests";
 mkdir "back/src";
+mkdir "back/src/documentation";
 mkdir "back/src/controllers";
 mkdir "back/src/routes";
 
@@ -173,8 +241,23 @@ npm init -y &> /dev/null;
 
 sed -i "s/back/$(grep name ../front/package.json | sed -e "s/\"name\": \"\(.*\)\",/\1/g" | sed "s/[[:blank:]]*//g")/g" package.json
 
-npm install express body-parser;
-npm install --save-dev typescript ts-node @types/express @types/node jest;
+sed -i '10d' package.json
+
+command="\"build\": \"tsc\"";
+sed -i "10i$command" package.json
+
+command="\"test\": \"...\",";
+sed -i "10i$command" package.json
+
+command="\"start:dev\": \"env NODE_ENV=development nodemon --watch src -L --exec npm run start:debug\",";
+sed -i "10i$command" package.json
+
+npm install express body-parser dotenv swagger-ui-express;
+npm install --save-dev typescript ts-node @types/express @types/node eslint jest nodemon;
+
+tee -a README.md &> /dev/null << EOL
+# $appName
+EOL
 
 tee -a tsconfig.json &> /dev/null << EOL
 {
@@ -187,9 +270,60 @@ tee -a tsconfig.json &> /dev/null << EOL
     "outDir": "./dist",
     "baseUrl": "./src"
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
+EOL
+
+tee -a swagger.json &> /dev/null << EOL
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "The Title of your project",
+    "description": "A description of your project",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  }
+}
+EOL
+
+tee -a .env.example &> /dev/null << EOL
+# Note we depend on NODE_ENV being set to dictate which of the env variables below get loaded at runtime.
+# See README for more details.
+
+# Put lots of randomness in these
+SESSION_SECRET=ashdfjhasdlkjfhalksdjhflak
+
+# Application Port - express server listens on this port (default 3000).
+PORT=3000
+EOL
+
+tee -a jest.config.js &> /dev/null << EOL
+module.exports = {
+  globals: {
+    "ts-jest": {
+      tsConfig: "tsconfig.json"
+    }
+  },
+  moduleFileExtensions: [
+    "ts",
+    "js"
+  ],
+  transform: {
+    "^.+\\.(ts|tsx)$": "ts-jest"
+  },
+  testMatch: [
+    "**/test/**/*.test.(ts|js)"
+  ],
+  testEnvironment: "node"
+};
 EOL
 
 tee -a .gitignore &> /dev/null << EOL
@@ -197,6 +331,15 @@ dist
 EOL
 
 tee -a .dockerignore &> /dev/null << EOL
+.env
+.env.example
+.git
+.gitignore
+**/*.md
+*.log
+node_modules
+docker-compose*
+Dockerfile
 dist
 tests
 EOL
@@ -215,6 +358,8 @@ EOL
 tee -a src/app.ts &> /dev/null << EOL
 import * as express from "express";
 import * as bodyParser from "body-parser";
+import SwaggerUI from 'swagger-ui';
+
 import { Routes } from "./routes";
 
 class App {
@@ -236,10 +381,10 @@ class App {
 export default new App().app;
 EOL
 
-tee -a src/controllers/nodes.controller.ts &> /dev/null << EOL
+tee -a src/controllers/root.controller.ts &> /dev/null << EOL
 import { Request, Response } from "express";
 
-export class NodesController {
+export class RootController {
   public index(req: Request, res: Response) {
     res.json({
       message: "Hello there!"
@@ -250,15 +395,17 @@ EOL
 
 tee -a src/routes/index.ts &> /dev/null << EOL
 import { Request, Response } from "express";
-import { NodesController } from "../controllers/nodes.controller";
+import swaggerUi from "swagger-ui-express";
+import * as swaggerDocument from "../swagger.json";
+
+import { RootController } from "../controllers/root.controller";
 
 export class Routes {
-  public nodesController: NodesController = new NodesController();
+  public rootController: RootController = new RootController();
 
   public routes(app): void {
-    app.route("/").get(this.nodesController.index);
-
-    app.route("/nodes").get(this.nodesController.index);
+    app.route("/").get(this.rootController.index);
+    app.use("/documentation", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   }
 }
 EOL
