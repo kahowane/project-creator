@@ -1,0 +1,517 @@
+#!/bin/bash
+
+## ----------------------- ##
+##         Colors          ##
+## ----------------------- ##
+
+reset=$'\e[0m'
+
+noir=$'\e[30m'
+rouge=$'\e[31m'
+vert=$'\e[32m'
+jaune=$'\e[33m'
+bleue=$'\e[34m'
+magenta=$'\e[35m'
+cyan=$'\e[36m'
+
+bgnoir='$\e[40m'
+bgrouge=$'\e[41m'
+bgvert=$'\e[42m'
+bgjaune=$'\e[43m'
+bgbleue=$'\e[44m'
+bgmagenta=$'\e[45m'
+bgcyan=$'\e[46m'
+
+## ----------------------- ##
+##        Functions        ##
+## ----------------------- ##
+
+question() {
+  text="$cyan → $1 :"
+  if [ "$2" != "" ]; then
+    text="$text [$2]"
+  fi
+  if [ "$3" != "" ]; then
+    text="$text ($3)"
+  fi
+  text="$text $reset"
+
+  read -p "$text" value
+
+  if [ "$value" == "" ]; then
+    echo $2
+  fi
+
+  echo $value
+}
+
+formatProjectName () {
+  echo $1 | sed -e "s/\b\(.\)/\U\1/g" | sed "s/[[:space:]]*//g"
+}
+
+formatProjectLabel () {
+  echo $1 | sed "s/./\L&/g" | sed "s/[[:space:]]*//g"
+}
+
+formatProjectFolder () {
+  echo $1 | sed "s/./\L&/g"
+}
+
+formatProjectDirectory () {
+  echo $1 | sed -e "s/.*(\/)$//g"
+}
+
+checkInstalledPackage () {
+  type $1 &> /dev/null || packageNotFound "$1"
+}
+
+packageNotFound () {
+  echo "$rouge $1 is required. $reset"
+  exit 1
+}
+
+toBoolean () {
+  case "$1" in
+    y) echo true ;;
+    *) echo false ;;
+  esac
+}
+
+## ----------------------- ##
+##          Forms          ##
+## ----------------------- ##
+
+checkInstalledPackage "npm"
+
+appName=$(formatProjectName "$(question "Project name" "app")")
+appLabel=$(formatProjectLabel "$appName")
+appFolder=$(formatProjectFolder "$appName")
+
+git=$(toBoolean "$(question "Do you want to initialize git" "n" "y|n")")
+
+if [ "$git" == "true" ]; then
+  checkInstalledPackage "git"
+  gitRemote=$(question "What is your git remote address")
+  gitName=$(question "What is your git user.name")
+  gitEmail=$(question "What is your git user.email")
+fi
+
+ci=$(question "Do you want a CI configuration" "none" "gitlab|travis|github|none")
+
+appDirectory=$(formatProjectDirectory "$(question "Project directory" ".")")
+
+front=$(question "What frontend do you want" "angular" "angular|vuejs|none")
+
+case "$front" in
+  angular)
+    checkInstalledPackage "ng"
+    pwa=$(toBoolean "$(question "Do you want a Progressive Web App" "n" "y|n")")
+    readme1="Angular"
+    ;;
+  vuejs)
+    checkInstalledPackage "vue"
+    readme1="VueJS"
+    ;;
+esac
+
+back=$(question "What backend do you want" "express" "express|lambda|none")
+
+## ----------------------- ##
+##     Install project     ##
+## ----------------------- ##
+
+mkdir -p "$appDirectory/$appFolder"
+cd "$appDirectory/$appFolder"
+
+git init --quiet
+if [ "$gitRemote" != "" ]; then
+  git remote add origin $gitRemote
+  git push -u origin --all
+fi
+if [ "$gitName" != "" ]; then
+  git config user.name "$gitName"
+fi
+if [ "$gitEmail" != "" ]; then
+  git config user.email "$gitEmail"
+fi
+
+tee -a README.md &> /dev/null << EOL
+# $appName
+
+## Frontend
+
+This application is running with $readme1 frontend.
+
+## Backend
+EOL
+
+tee -a .gitignore &> /dev/null << EOL
+**/dist
+EOL
+
+tee -a .editorconfig &> /dev/null << EOL
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+EOL
+
+# TODO : créer une config de base
+case "$ci" in
+  gitlab)
+    touch .gitlab-ci.yml
+    ;;
+  travis)
+    touch .travis.yml
+    ;;
+  github)
+    mkdir -p .github/workflows
+    touch .github/workflows/main.yml
+    ;;
+esac
+
+## ----------------------- ##
+##      Install infra      ##
+## ----------------------- ##
+mkdir .infra
+mkdir .infra/front
+mkdir .infra/back
+
+tee -a main.tf &> /dev/null << EOL
+provider "aws" {
+  region  = "eu-west-3"
+}
+
+module "front" {
+  source = "./.infra/front"
+}
+
+module "back" {
+  source = "./.infra/back"
+}
+EOL
+
+tee -a .infra/main.tf &> /dev/null << EOL
+EOL
+
+tee -a .infra/front/main.tf &> /dev/null << EOL
+EOL
+
+tee -a .infra/back/main.tf &> /dev/null << EOL
+EOL
+
+## ----------------------- ##
+##      Install front      ##
+## ----------------------- ##
+mkdir front
+
+tee -a .infra/front/main.tf &> /dev/null << EOL
+EOL
+
+case "$front" in
+  angular)
+    ng new $appLabel --skipGit=true --directory=front
+    if [ "$pwa" == "true" ]; then
+      cd front
+      ng add @angular/pwa
+      cd ..
+    fi
+    ;;
+  vuejs)
+    vue create --bare --no-git $appLabel
+    mv $appLabel front
+    ;;
+esac
+
+## ----------------------- ##
+##      Install back       ##
+## ----------------------- ##
+mkdir back
+cd back
+
+mkdir src
+npm init -y &> /dev/null;
+sed -i "s/back/$appLabel/g" package.json
+sed -i '7d' package.json
+
+command="\\\t\\t\"build\": \"tsc\"";
+sed -i "7i$command" package.json
+
+tee -a README.md &> /dev/null << EOL
+# $appName
+EOL
+
+tee -a tsconfig.json &> /dev/null << EOL
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "pretty": true,
+    "sourceMap": true,
+    "target": "es6",
+    "outDir": "./dist",
+    "baseUrl": "./src"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
+EOL
+
+npm install --save-dev typescript ts-node @types/node
+
+case "$back" in
+  express)
+    mkdir tests
+    mkdir src/documentation
+    mkdir src/controllers
+    mkdir src/routes
+
+    command="\\\t\\t\"test\": \"\","
+    sed -i "7i$command" package.json
+
+    command="\\\t\\t\"start:debug\": \"npm run build && node --inspect=0.0.0.0:5858 ./dist/server.js\","
+    sed -i "7i$command" package.json
+
+    command="\\\t\\t\"start:dev\": \"env NODE_ENV=development nodemon --watch src -L --exec npm run start:debug\","
+    sed -i "7i$command" package.json
+
+    npm install express body-parser dotenv swagger-ui-express
+    npm install --save-dev @types/express eslint jest nodemon
+
+    tee -a nodemon.json &> /dev/null << EOL
+{
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    ".git",
+    "node_modules"
+  ],
+  "watch": [
+    "src"
+  ],
+  "exec": "npm start",
+  "ext": "ts"
+}
+EOL
+
+    tee -a Dockerfile.dev &> /dev/null << EOL
+FROM node:lts
+
+WORKDIR /usr/src
+
+COPY package.json /usr/src/
+RUN npm install
+
+COPY . /usr/src/
+
+EXPOSE 3000
+
+CMD [ "npm", "run", "start" ]
+EOL
+
+    tee -a Dockerfile.prod &> /dev/null << EOL
+### =============== ###
+###     STAGE 1     ###
+### =============== ###
+FROM node:lts AS builder
+
+WORKDIR /usr/src
+
+COPY package*.json /usr/src/
+RUN npm install
+
+COPY . /usr/src/
+
+RUN npm run build
+
+
+
+### =============== ###
+###     STAGE 2     ###
+### =============== ###
+FROM node:lts
+
+WORKDIR /usr/app
+
+COPY package*.json /usr/app/
+RUN npm install --production
+
+ENV APP_PORT=3000
+
+ENV NODE_ENV=production
+
+EXPOSE \$APP_PORT
+
+RUN mkdir dist
+
+COPY --from=builder /usr/src/dist /usr/app
+
+COPY --from=builder /usr/src/.sequelizerc /usr/app/
+
+CMD ["npm", "run", "start:prod"]
+EOL
+
+    tee -a swagger.json &> /dev/null << EOL
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "The Title of your project",
+    "description": "A description of your project",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  }
+}
+EOL
+
+    tee -a .env.example &> /dev/null << EOL
+# Note we depend on NODE_ENV being set to dictate which of the env variables below get loaded at runtime.
+# See README for more details.
+
+# Put lots of randomness in these
+SESSION_SECRET=ashdfjhasdlkjfhalksdjhflak
+
+# Application Port - express server listens on this port (default 3000).
+PORT=3000
+EOL
+
+    tee -a jest.config.js &> /dev/null << EOL
+module.exports = {
+  globals: {
+    "ts-jest": {
+      tsConfig: "tsconfig.json"
+    }
+  },
+  moduleFileExtensions: [
+    "ts",
+    "js"
+  ],
+  transform: {
+    "^.+\\.(ts|tsx)$": "ts-jest"
+  },
+  testMatch: [
+    "**/test/**/*.test.(ts|js)"
+  ],
+  testEnvironment: "node"
+};
+EOL
+
+    tee -a .dockerignore &> /dev/null << EOL
+.env
+.env.example
+.git
+.gitignore
+**/*.md
+*.log
+node_modules
+docker-compose*
+Dockerfile
+dist
+tests
+EOL
+
+    tee -a src/server.ts &> /dev/null << EOL
+import app from "./app";
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => console.log(`Example app listening on port ${PORT}!`));
+EOL
+
+    tee -a src/app.ts &> /dev/null << EOL
+import * as express from "express";
+import * as bodyParser from "body-parser";
+
+import { Routes } from "./routes";
+
+class App {
+  public app: express.Application;
+  public routePrv: Routes = new Routes();
+  constructor() {
+    this.app = express();
+    this.config();
+    this.routePrv.routes(this.app);
+  }
+  private config(): void {
+    this.app.use(bodyParser.json());
+    this.app.use(bodyParser.urlencoded({ extended: false }));
+  }
+}
+
+export default new App().app;
+EOL
+
+    tee -a src/controllers/root.controller.ts &> /dev/null << EOL
+import { Request, Response } from "express";
+
+export class RootController {
+  public index(req: Request, res: Response) {
+    res.json({
+      message: "Hello there!"
+    });
+  }
+}
+EOL
+
+    tee -a src/routes/index.ts &> /dev/null << EOL
+import { Request, Response } from "express";
+
+import swaggerUi from "swagger-ui-express";
+import * as swaggerDocument from "../swagger.json";
+
+import { RootController } from "../controllers/root.controller";
+
+export class Routes {
+  public rootController: RootController = new RootController();
+
+  public routes(app): void {
+    app.route("/").get(this.rootController.index);
+    app.use("/documentation", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  }
+}
+EOL
+  ;;
+  lambda)
+    npm install --save-dev @types/aws-lambda
+
+tee -a .infra/main.tf &> /dev/null << EOL
+resource "aws_api_gateway_rest_api" "$appLabel" {
+  name        = "$appLabel"
+  description = "$appName"
+
+  endpoint_configuration {
+    types = ["REGIONAL"]
+  }
+}
+EOL
+
+tee -a .infra/back/main.tf &> /dev/null << EOL
+EOL
+
+    tee -a main.ts &> /dev/null << EOL
+'use strict'
+
+exports.handler = function(event, context, callback) {
+  var response = {
+    statusCode: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8'
+    },
+    body: '<p>Hello world!</p>'
+  }
+  callback(null, response)
+}
+EOL
+  ;;
+esac
