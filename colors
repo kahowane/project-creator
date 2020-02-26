@@ -1,0 +1,17 @@
+reset='\e[0m';
+
+noir='\e[30m';
+rouge='\e[31m';
+vert='\e[32m';
+jaune='\e[33m';
+bleue='\e[34m';
+magenta='\e[35m';
+cyan='\e[36m';
+
+bgnoir='\e[40m';
+bgrouge='\e[41m';
+bgvert='\e[42m';
+bgjaune='\e[43m';
+bgbleue='\e[44m';
+bgmagenta='\e[45m';
+bgcyan='\e[46m';
