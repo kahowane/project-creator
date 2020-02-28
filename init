@@ -1,45 +1,31 @@
 #!/bin/bash
 
-## ----------------------- ##
-##         Colors          ##
-## ----------------------- ##
+## -------------------------------------------------------------------------------------------- ##
+##                                            Colors                                            ##
+## -------------------------------------------------------------------------------------------- ##
 
-reset=$'\e[0m'
+normal=$'\e[0m'
+bold=$'\e[1m'
 
-noir=$'\e[30m'
 rouge=$'\e[31m'
 vert=$'\e[32m'
-jaune=$'\e[33m'
-bleue=$'\e[34m'
-magenta=$'\e[35m'
-cyan=$'\e[36m'
 
-bgnoir='$\e[40m'
-bgrouge=$'\e[41m'
-bgvert=$'\e[42m'
-bgjaune=$'\e[43m'
-bgbleue=$'\e[44m'
-bgmagenta=$'\e[45m'
-bgcyan=$'\e[46m'
 
-## ----------------------- ##
-##        Functions        ##
-## ----------------------- ##
+
+## -------------------------------------------------------------------------------------------- ##
+##                                           Functions                                          ##
+## -------------------------------------------------------------------------------------------- ##
 
 question() {
-  text="$cyan → $1 :"
+  text="$vert?$normal $bold$1?$normal"
   if [ "$2" != "" ]; then
-    text="$text [$2]"
+    text="$text ($2)"
   fi
-  if [ "$3" != "" ]; then
-    text="$text ($3)"
-  fi
-  text="$text $reset"
 
-  read -p "$text" value
+  read -p "$text " value
 
   if [ "$value" == "" ]; then
-    echo $2
+    echo $3
   fi
 
   echo $value
@@ -66,28 +52,32 @@ checkInstalledPackage () {
 }
 
 packageNotFound () {
-  echo "$rouge $1 is required. $reset"
+  echo "$rouge$1 is required.$normal"
   exit 1
 }
 
 toBoolean () {
   case "$1" in
-    y) echo true ;;
+    y|Y) echo true ;;
     *) echo false ;;
   esac
 }
 
-## ----------------------- ##
-##          Forms          ##
-## ----------------------- ##
+
+
+## -------------------------------------------------------------------------------------------- ##
+##                                             Forms                                            ##
+## -------------------------------------------------------------------------------------------- ##
 
 checkInstalledPackage "npm"
 
-appName=$(formatProjectName "$(question "Project name" "app")")
+appName=$(formatProjectName "$(question "Project name" "app" "app")")
 appLabel=$(formatProjectLabel "$appName")
 appFolder=$(formatProjectFolder "$appName")
 
-git=$(toBoolean "$(question "Do you want to initialize git" "n" "y|n")")
+appDirectory=$(formatProjectDirectory "$(question "Project directory" "." ".")")
+
+git=$(toBoolean "$(question "Do you want to initialize git" "y/N" "n")")
 
 if [ "$git" == "true" ]; then
   checkInstalledPackage "git"
@@ -96,46 +86,39 @@ if [ "$git" == "true" ]; then
   gitEmail=$(question "What is your git user.email")
 fi
 
-ci=$(question "Do you want a CI configuration" "none" "gitlab|travis|github|none")
+# ci=$(question "Do you want a CI configuration" "none" "gitlab|travis|github|none")
 
-appDirectory=$(formatProjectDirectory "$(question "Project directory" ".")")
+front=$(toBoolean "$(question "Do you what to generate an angular frontend" "y/N" "n")")
 
-front=$(question "What frontend do you want" "angular" "angular|vuejs|none")
-
-case "$front" in
-  angular)
+if [ "$front" == "true" ]; then
     checkInstalledPackage "ng"
-    pwa=$(toBoolean "$(question "Do you want a Progressive Web App" "n" "y|n")")
-    readme1="Angular"
-    ;;
-  vuejs)
-    checkInstalledPackage "vue"
-    readme1="VueJS"
-    ;;
-esac
+    pwa=$(toBoolean "$(question "Do you want a Progressive Web App" "y/N" "n")")
+fi
 
-back=$(question "What backend do you want" "express" "express|lambda|none")
+back=$(toBoolean "$(question "Do you what to generate an express backend" "y/N" "n")")
 
-## ----------------------- ##
-##     Install project     ##
-## ----------------------- ##
+## -------------------------------------------------------------------------------------------- ##
+##                                        Install project                                       ##
+## -------------------------------------------------------------------------------------------- ##
 
 mkdir -p "$appDirectory/$appFolder"
 cd "$appDirectory/$appFolder"
 
-git init --quiet
-if [ "$gitRemote" != "" ]; then
-  git remote add origin $gitRemote
-  git push -u origin --all
-fi
-if [ "$gitName" != "" ]; then
-  git config user.name "$gitName"
-fi
-if [ "$gitEmail" != "" ]; then
-  git config user.email "$gitEmail"
+if [ "$git" == "true" ]; then
+  git init --quiet
+  if [ "$gitRemote" != "" ]; then
+    git remote add origin $gitRemote
+    git push -u origin --all
+  fi
+  if [ "$gitName" != "" ]; then
+    git config user.name "$gitName"
+  fi
+  if [ "$gitEmail" != "" ]; then
+    git config user.email "$gitEmail"
+  fi
 fi
 
-tee -a README.md &> /dev/null << EOL
+tee README.md &> /dev/null << EOL
 # $appName
 
 ## Frontend
@@ -145,11 +128,11 @@ This application is running with $readme1 frontend.
 ## Backend
 EOL
 
-tee -a .gitignore &> /dev/null << EOL
+tee .gitignore &> /dev/null << EOL
 **/dist
 EOL
 
-tee -a .editorconfig &> /dev/null << EOL
+tee .editorconfig &> /dev/null << EOL
 root = true
 
 [*]
@@ -161,149 +144,230 @@ trim_trailing_whitespace = true
 insert_final_newline = true
 EOL
 
-# TODO : créer une config de base
-case "$ci" in
-  gitlab)
-    touch .gitlab-ci.yml
-    ;;
-  travis)
-    touch .travis.yml
-    ;;
-  github)
-    mkdir -p .github/workflows
-    touch .github/workflows/main.yml
-    ;;
-esac
 
-## ----------------------- ##
-##      Install infra      ##
-## ----------------------- ##
-mkdir .infra
-mkdir .infra/front
-mkdir .infra/back
 
-tee -a main.tf &> /dev/null << EOL
-provider "aws" {
-  region  = "eu-west-3"
+## -------------------------------------------------------------------------------------------- ##
+##                                          Install CI                                          ##
+## -------------------------------------------------------------------------------------------- ##
+
+
+
+## -------------------------------------------------------------------------------------------- ##
+##                                         Install infra                                        ##
+## -------------------------------------------------------------------------------------------- ##
+
+
+
+## -------------------------------------------------------------------------------------------- ##
+##                                         Install front                                        ##
+## -------------------------------------------------------------------------------------------- ##
+
+if [ "$front" == "true" ]; then
+  mkdir front
+  cd front
+  ng new $appLabel --skipGit=true --directory=.
+  if [ "$pwa" == "true" ]; then
+    ng add @angular/pwa
+  fi
+  cd ..
+fi
+
+
+
+## -------------------------------------------------------------------------------------------- ##
+##                                         Install back                                         ##
+## -------------------------------------------------------------------------------------------- ##
+
+if [ "$back" == "true" ]; then
+  mkdir back
+  cd back
+
+  tee package.json &> /dev/null << EOL
+{
+  "name": "back",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "tsc": "tsc",
+    "start": "ts-node --transpile-only ./src/server.ts",
+    "test": "jest",
+    "prod": "tsc && node ./dist/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+  },
+  "devDependencies": {
+  }
 }
-
-module "front" {
-  source = "./.infra/front"
-}
-
-module "back" {
-  source = "./.infra/back"
-}
 EOL
 
-tee -a .infra/main.tf &> /dev/null << EOL
+  npm install --save express body-parser consistency dotenv
+  npm install --save-dev @types/node @types/express typescript ts-node @types/dotenv jest ts-jest @types/jest
+
+  tee swagger.yml &> /dev/null << EOL
+openapi: "3.0.0"
+
+info:
+  title: "Title"
+  description: "Description"
+  version: "1.0.0"
+
+servers:
+- url: "https://api.example.com/v1"
+
+tags:
+- name: Tag1
+  description: "Description tag1"
+
+paths:
+  /:
+    get:
+      tags:
+        - Tag1
+      description: "Get all"
+      responses:
+        '200':
+          description: "Description response"
+    post:
+      tags:
+        - Tag1
+      description: "Post"
+      responses:
+        '200':
+          description: "Description response"
+    put:
+      tags:
+        - Tag1
+      description: "Put"
+      responses:
+        '200':
+          description: "Description response"
+    patch:
+      tags:
+        - Tag1
+      description: "Patch"
+      responses:
+        '200':
+          description: "Description response"
+  /{id}:
+    get:
+      tags:
+        - Tag1
+      description: "Get one"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: "Description response"
+    delete:
+      tags:
+        - Tag1
+      description: "Delete one"
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: "Description response"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []
 EOL
 
-tee -a .infra/front/main.tf &> /dev/null << EOL
+  tee jest.config.js &> /dev/null << EOL
+// For a detailed explanation regarding each configuration property, visit:
+// https://jestjs.io/docs/en/configuration.html
+
+module.exports = {
+  globals: {
+    'ts-jest': {
+      tsConfig: 'test/tsconfig.json'
+    }
+  },
+  moduleFileExtensions: [
+    'ts',
+    'js'
+  ],
+  transform: {
+    '^.+\\.(ts|tsx)$': 'ts-jest'
+  },
+  testMatch: [
+    '**/test/**/*.test.(ts|js)'
+  ],
+  testEnvironment: 'node'
+};
 EOL
 
-tee -a .infra/back/main.tf &> /dev/null << EOL
-EOL
-
-## ----------------------- ##
-##      Install front      ##
-## ----------------------- ##
-mkdir front
-
-tee -a .infra/front/main.tf &> /dev/null << EOL
-EOL
-
-case "$front" in
-  angular)
-    ng new $appLabel --skipGit=true --directory=front
-    if [ "$pwa" == "true" ]; then
-      cd front
-      ng add @angular/pwa
-      cd ..
-    fi
-    ;;
-  vuejs)
-    vue create --bare --no-git $appLabel
-    mv $appLabel front
-    ;;
-esac
-
-## ----------------------- ##
-##      Install back       ##
-## ----------------------- ##
-mkdir back
-cd back
-
-mkdir src
-npm init -y &> /dev/null;
-sed -i "s/back/$appLabel/g" package.json
-sed -i '7d' package.json
-
-command="\\\t\\t\"build\": \"tsc\"";
-sed -i "7i$command" package.json
-
-tee -a README.md &> /dev/null << EOL
-# $appName
-EOL
-
-tee -a tsconfig.json &> /dev/null << EOL
+  tee tsconfig.json &> /dev/null << EOL
 {
   "compilerOptions": {
     "module": "commonjs",
+    "esModuleInterop": true,
+    "target": "es6",
     "moduleResolution": "node",
     "pretty": true,
     "sourceMap": true,
-    "target": "es6",
-    "outDir": "./dist",
-    "baseUrl": "./src"
+    "outDir": "dist",
+    "baseUrl": ".",
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "*": [
+        "node_modules/*"
+      ]
+    }
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*"
   ],
   "exclude": [
-    "node_modules"
+    "test/**/*"
   ]
 }
 EOL
 
-npm install --save-dev typescript ts-node @types/node
+  tee .env.example &> /dev/null << EOL
+APP_NAME=App
+APP_ENV=local
+APP_DEBUG=false
+APP_PORT=3000
 
-case "$back" in
-  express)
-    mkdir tests
-    mkdir src/documentation
-    mkdir src/controllers
-    mkdir src/routes
-
-    command="\\\t\\t\"test\": \"\","
-    sed -i "7i$command" package.json
-
-    command="\\\t\\t\"start:debug\": \"npm run build && node --inspect=0.0.0.0:5858 ./dist/server.js\","
-    sed -i "7i$command" package.json
-
-    command="\\\t\\t\"start:dev\": \"env NODE_ENV=development nodemon --watch src -L --exec npm run start:debug\","
-    sed -i "7i$command" package.json
-
-    npm install express body-parser dotenv swagger-ui-express
-    npm install --save-dev @types/express eslint jest nodemon
-
-    tee -a nodemon.json &> /dev/null << EOL
-{
-  "ignore": [
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    ".git",
-    "node_modules"
-  ],
-  "watch": [
-    "src"
-  ],
-  "exec": "npm start",
-  "ext": "ts"
-}
+#HOSTNAME=
+#PORT=
+#DB_NAME=App
+#USERNAME=app
+#PASSWORD=password
 EOL
 
-    tee -a Dockerfile.dev &> /dev/null << EOL
+  tee .env &> /dev/null << EOL
+APP_NAME=App
+APP_ENV=local
+APP_DEBUG=true
+APP_PORT=3000
+EOL
+
+  tee -a Dockerfile.dev &> /dev/null << EOL
 FROM node:lts
 
 WORKDIR /usr/src
@@ -360,54 +424,7 @@ COPY --from=builder /usr/src/.sequelizerc /usr/app/
 CMD ["npm", "run", "start:prod"]
 EOL
 
-    tee -a swagger.json &> /dev/null << EOL
-{
-  "openapi": "3.0.0",
-  "info": {
-    "version": "1.0.0",
-    "title": "The Title of your project",
-    "description": "A description of your project",
-    "license": {
-      "name": "MIT",
-      "url": "https://opensource.org/licenses/MIT"
-    }
-  }
-}
-EOL
-
-    tee -a .env.example &> /dev/null << EOL
-# Note we depend on NODE_ENV being set to dictate which of the env variables below get loaded at runtime.
-# See README for more details.
-
-# Put lots of randomness in these
-SESSION_SECRET=ashdfjhasdlkjfhalksdjhflak
-
-# Application Port - express server listens on this port (default 3000).
-PORT=3000
-EOL
-
-    tee -a jest.config.js &> /dev/null << EOL
-module.exports = {
-  globals: {
-    "ts-jest": {
-      tsConfig: "tsconfig.json"
-    }
-  },
-  moduleFileExtensions: [
-    "ts",
-    "js"
-  ],
-  transform: {
-    "^.+\\.(ts|tsx)$": "ts-jest"
-  },
-  testMatch: [
-    "**/test/**/*.test.(ts|js)"
-  ],
-  testEnvironment: "node"
-};
-EOL
-
-    tee -a .dockerignore &> /dev/null << EOL
+  tee -a .dockerignore &> /dev/null << EOL
 .env
 .env.example
 .git
@@ -421,97 +438,213 @@ dist
 tests
 EOL
 
-    tee -a src/server.ts &> /dev/null << EOL
-import app from "./app";
+  mkdir src
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => console.log(`Example app listening on port ${PORT}!`));
-EOL
-
-    tee -a src/app.ts &> /dev/null << EOL
-import * as express from "express";
-import * as bodyParser from "body-parser";
-
-import { Routes } from "./routes";
+  tee src/app.ts &> /dev/null << EOL
+import express from 'express';
+import { Application } from 'express';
 
 class App {
-  public app: express.Application;
-  public routePrv: Routes = new Routes();
-  constructor() {
+  public app: Application;
+  public port: number;
+
+  constructor(
+    private appInit: { port: number; middleWares: any; controllers: any; }
+  ) {
     this.app = express();
-    this.config();
-    this.routePrv.routes(this.app);
+    this.port = this.appInit.port
+
+    this.middlewares(this.appInit.middleWares);
+    this.routes(this.appInit.controllers);
   }
-  private config(): void {
-    this.app.use(bodyParser.json());
-    this.app.use(bodyParser.urlencoded({ extended: false }));
-  }
-}
 
-export default new App().app;
-EOL
-
-    tee -a src/controllers/root.controller.ts &> /dev/null << EOL
-import { Request, Response } from "express";
-
-export class RootController {
-  public index(req: Request, res: Response) {
-    res.json({
-      message: "Hello there!"
+  private middlewares(middleWares: { forEach: (arg0: (middleWare: any) => void) => void; }) {
+    middleWares.forEach(middleWare => {
+      this.app.use(middleWare);
     });
   }
-}
-EOL
 
-    tee -a src/routes/index.ts &> /dev/null << EOL
-import { Request, Response } from "express";
+  private routes(controllers: { forEach: (arg0: (controller: any) => void) => void; }) {
+    controllers.forEach(controller => {
+      this.app.use('/', controller.router);
+    });
+  }
 
-import swaggerUi from "swagger-ui-express";
-import * as swaggerDocument from "../swagger.json";
-
-import { RootController } from "../controllers/root.controller";
-
-export class Routes {
-  public rootController: RootController = new RootController();
-
-  public routes(app): void {
-    app.route("/").get(this.rootController.index);
-    app.use("/documentation", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  public listen() {
+    this.app.listen(this.port, () => {
+      console.log(`App listening on the http://localhost:${this.port}`)
+    })
   }
 }
+
+export default App;
 EOL
-  ;;
-  lambda)
-    npm install --save-dev @types/aws-lambda
 
-tee -a .infra/main.tf &> /dev/null << EOL
-resource "aws_api_gateway_rest_api" "$appLabel" {
-  name        = "$appLabel"
-  description = "$appName"
+  tee src/server.ts &> /dev/null << EOL
+import App from './app';
 
-  endpoint_configuration {
-    types = ["REGIONAL"]
+import * as bodyParser from 'body-parser';
+
+import config from './config/config';
+
+import loggerMiddleware from './middleware/logger';
+import tokenMiddleware from './middleware/token';
+
+import HomeController from './controllers/home/home.controller';
+
+const app: App = new App({
+  port: config.app.port,
+  middleWares: [
+    bodyParser.json(),
+    bodyParser.urlencoded({ extended: true }),
+    loggerMiddleware,
+    tokenMiddleware,
+  ],
+  controllers: [
+    new HomeController(),
+  ],
+});
+
+app.listen();
+EOL
+
+  mkdir src/config
+
+  tee src/config/config.ts &> /dev/null << EOL
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config(
+    { path:'.env' }
+  );
+}
+
+const config = {
+  app: {
+    env: process.env.APP_ENV || 'prod',
+    name: process.env.APP_NAME || 'App',
+    port: <number><unknown>process.env.APP_PORT || 3000,
+  },
+  database: {
+    database: process.env.RDS_DB_NAME || 'app',
+    host: process.env.RDS_HOSTNAME || '127.0.0.1',
+    password: process.env.RDS_PASSWORD || 'password',
+    port: <number><unknown>process.env.RDS_PORT || 7000,
+    username: process.env.RDS_USERNAME || 'app',
+  },
+};
+
+export default config;
+EOL
+
+  mkdir src/middleware
+
+  tee src/middleware/logger.ts &> /dev/null << EOL
+import { Request, Response } from 'express';
+
+const loggerMiddleware: Function = (req: Request, resp: Response, next: Function) => {
+  console.log('Request logged:', req.method, req.path);
+  next();
+}
+
+export default loggerMiddleware;
+EOL
+
+  tee src/middleware/token.ts &> /dev/null << EOL
+import { Request, Response } from 'express';
+
+const tokenMiddleware: Function = (req: Request, resp: Response, next: Function) => {
+  const token = req.get('Authorization');
+  if (!token) next({status: 401, message: 'Authorization header is required'});
+  req.payload = jwt.decode(token);
+  next();
+}
+
+export default loggerMiddleware;
+EOL
+
+  mkdir src/interfaces
+
+  tee src/interfaces/IControllerBase.interface.ts &> /dev/null << EOL
+interface IControllerBase {
+  initRoutes(): any;
+}
+
+export default IControllerBase;
+EOL
+
+  mkdir src/controllers
+
+  mkdir src/controllers/home
+
+  tee src/controllers/home/home.controller.ts &> /dev/null << EOL
+import express from 'express';
+import { Request, Response } from 'express';
+
+import IControllerBase from '../../interfaces/IControllerBase.interface';
+
+class HomeController implements IControllerBase {
+  public path = '/';
+  public router = express.Router();
+
+  constructor() {
+    this.initRoutes();
+  }
+
+  public initRoutes() {
+    this.router.get('/', this.index);
+  }
+
+  index = (req: Request, res: Response) => {
+
+    const users = [
+      {
+        id: 1,
+        name: 'Ali'
+      },
+      {
+        id: 2,
+        name: 'Can'
+      },
+      {
+        id: 3,
+        name: 'Ahmet'
+      }
+    ];
+
+    res.json(users);
   }
 }
+
+export default HomeController;
 EOL
 
-tee -a .infra/back/main.tf &> /dev/null << EOL
-EOL
+  mkdir test
 
-    tee -a main.ts &> /dev/null << EOL
-'use strict'
-
-exports.handler = function(event, context, callback) {
-  var response = {
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8'
-    },
-    body: '<p>Hello world!</p>'
-  }
-  callback(null, response)
+  tee test/tsconfig.json &> /dev/null << EOL
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "target": "es6",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "allowSyntheticDefaultImports": true,
+    "types": ["node", "jest"],
+    /* for sequelize-typescript*/
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "paths": {
+      "*": [
+        "node_modules/*"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*",
+  ]
 }
 EOL
-  ;;
-esac
+fi
